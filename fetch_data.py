@@ -134,6 +134,25 @@ def main():
     for ticker in WATCHLIST:
         results.append(analyze_ticker(ticker))
 
+    # If EVERY ticker failed, the data source is unreachable — almost always the
+    # sandbox egress allowlist missing the Yahoo Finance hosts. Fail loudly with a
+    # non-zero exit so the routine does NOT go on to write an empty summary / email.
+    succeeded = [r for r in results if "error" not in r]
+    if not succeeded:
+        sample_errors = sorted({r.get("error", "unknown") for r in results})
+        print(
+            "ERROR: all {n} tickers failed to fetch — no price data at all.\n"
+            "This almost always means the Yahoo Finance hosts are NOT allowlisted "
+            "for egress yet. Add these at https://claude.ai/settings/capabilities:\n"
+            "    query1.finance.yahoo.com\n"
+            "    query2.finance.yahoo.com\n"
+            "Underlying errors seen: {errs}".format(
+                n=len(results), errs="; ".join(sample_errors)
+            ),
+            file=sys.stderr,
+        )
+        sys.exit(2)
+
     flagged = [r for r in results if r.get("flagged")]
 
     payload = {

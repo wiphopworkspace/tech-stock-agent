@@ -68,13 +68,34 @@ Do everything yourself — do NOT call any external LLM API. You are the summari
    from fetch_data). Create the `summaries/` folder if it does not exist. Write valid
    UTF-8 JSON (Thai characters as-is, not escaped).
 
-6. **Email it.** Run `python send_email.py summaries/YYYY-MM-DD.json` with the matching
-   path. The script renders the JSON into scannable HTML cards.
+6. **Render the email.** Run `python render_email.py summaries/YYYY-MM-DD.json`.
+   It writes three UTF-8 files next to the JSON and prints an ASCII-safe JSON line:
+   ```json
+   {"to": "...", "subject_path": "...html...", "html_path": "...", "text_path": "..."}
+   ```
+   (`to` is `EMAIL_TO` if that env var is set, else `null`.) No secrets, no SMTP.
 
-7. **Print the summary** in the terminal as well (a readable Thai version) so the user
-   sees it immediately.
+7. **Create the Gmail draft via the connector.** Read the three rendered files
+   (`subject_path`, `html_path`, `text_path`) as UTF-8, then call the Gmail connector
+   tool **`mcp__claude_ai_Gmail__create_draft`** with:
+   - `to`: `[recipient]` — use the `to` from step 6 if non-null; otherwise
+     `["wiphopworkspace@gmail.com"]`.
+   - `subject`: the contents of the `.subject.txt` file (Thai, with the date).
+   - `body`: the contents of the `.txt` file (plain-text alternative).
+   - `htmlBody`: the contents of the `.html` file (the scannable card layout).
+
+   This drops a ready-to-send draft into Gmail. The connector has **no send tool**,
+   so delivery is one tap in Gmail — do not try to "send"; creating the draft is the
+   final email step. Do NOT use `send_email.py` (SMTP is blocked by sandbox egress).
+
+8. **Print the summary** in the terminal as well (a readable Thai version) so the user
+   sees it immediately, and report the created draft id.
 
 ## Notes
 - All amounts/percentages come from fetch_data's JSON — do not invent numbers.
-- The JSON summary file is the single source of truth that gets emailed, so make it
-  complete and valid before sending.
+- The JSON summary file is the single source of truth; render it, then draft it.
+- If `fetch_data.py` exits non-zero saying all tickers failed, STOP: the Yahoo hosts
+  (query1/query2.finance.yahoo.com) are not allowlisted for egress yet. Do not write
+  an empty summary or create a draft — just report that the allowlist needs the hosts.
+- `send_email.py` remains only as a local/SMTP fallback for when smtp.gmail.com is
+  allowlisted; the routine itself uses the Gmail-connector draft path above.
